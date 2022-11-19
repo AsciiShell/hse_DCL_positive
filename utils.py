@@ -1,22 +1,8 @@
-from PIL import Image
-from torchvision import transforms
-from torchvision.datasets import STL10
 import cv2
 import numpy as np
+from torchvision import transforms
 
 np.random.seed(0)
-
-
-class STL10Pair(STL10):
-    def __getitem__(self, index):
-        img, target = self.data[index], self.labels[index]
-        img = Image.fromarray(np.transpose(img, (1, 2, 0)))
-
-        if self.transform is not None:
-            pos_1 = self.transform(img)
-            pos_2 = self.transform(img)
-
-        return pos_1, pos_2, target
 
 
 class GaussianBlur(object):
@@ -38,6 +24,7 @@ class GaussianBlur(object):
             sample = cv2.GaussianBlur(sample, (self.kernel_size, self.kernel_size), sigma)
 
         return sample
+
 
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
