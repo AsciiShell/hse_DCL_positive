@@ -12,20 +12,11 @@ from tqdm.auto import tqdm
 
 import utils
 from datasets import get_dataset
+from loss import get_loss
 from model import Model
 
 
-def get_negative_mask(batch_size):
-    negative_mask = torch.ones((batch_size, 2 * batch_size), dtype=bool)
-    for i in range(batch_size):
-        negative_mask[i, i] = 0
-        negative_mask[i, i + batch_size] = 0
-
-    negative_mask = torch.cat((negative_mask, negative_mask), 0)
-    return negative_mask
-
-
-def train(net, data_loader, train_optimizer, batch_size, temperature, debiased, tau_plus, *, cuda=True, writer, step=0):
+def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, step=0):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
     for pos_1, pos_2, target in train_bar:
@@ -34,29 +25,8 @@ def train(net, data_loader, train_optimizer, batch_size, temperature, debiased, 
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
 
-        # neg score
-        out = torch.cat([out_1, out_2], dim=0)
-        neg = torch.exp(torch.mm(out, out.t().contiguous()) / temperature)
-        mask = get_negative_mask(batch_size)
-        if cuda:
-            mask = mask.cuda()
-        neg = neg.masked_select(mask).view(2 * batch_size, -1)
-
-        # pos score
-        pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / temperature)
-        pos = torch.cat([pos, pos], dim=0)
-
-        # estimator g()
-        if debiased:
-            N = batch_size * 2 - 2
-            Ng = (-tau_plus * N * pos + neg.sum(dim=-1)) / (1 - tau_plus)
-            # constrain (optional)
-            Ng = torch.clamp(Ng, min=N * np.e ** (-1 / temperature))
-        else:
-            Ng = neg.sum(dim=-1)
-
         # contrastive loss
-        loss = (-torch.log(pos / (pos + Ng))).mean()
+        loss = loss_criterion(out_1, out_2)
         writer.add_scalar("loss/train", loss, step)
         step += 1
 
@@ -124,10 +94,11 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
     return total_top1 / total_num * 100, total_top5 / total_num * 100
 
 
-def main(dataset: str, root: str, batch_size: int, model_arch, *, cuda=True, writer,
-         feature_dim=128, temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, debiased=True):
+def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer,
+         feature_dim=128, temperature=0.5, tau_plus=0.1, top_k=200, epochs=200):
     wandb.config.update({
         "dataset": dataset,
+        "loss": loss,
         "model": model_arch,
         "feature_dim": feature_dim,
         "temperature": temperature,
@@ -135,11 +106,10 @@ def main(dataset: str, root: str, batch_size: int, model_arch, *, cuda=True, wri
         "k": top_k,
         "batch_size": batch_size,
         "epochs": epochs,
-        "debiased": debiased,
     })
     dataset_cls = get_dataset(dataset)
     train_loader = DataLoader(
-        dataset_cls(root=root, train=True, transform=utils.train_transform),
+        dataset_cls(root=root, train=True, transform=utils.train_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
@@ -147,18 +117,20 @@ def main(dataset: str, root: str, batch_size: int, model_arch, *, cuda=True, wri
         drop_last=True,
     )
     memory_loader = DataLoader(
-        dataset_cls(root=root, train=True, transform=utils.test_transform),
+        dataset_cls(root=root, train=True, transform=utils.test_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
         pin_memory=True)
     test_loader = DataLoader(
-        dataset_cls(root=root, train=False, transform=utils.test_transform),
+        dataset_cls(root=root, train=False, transform=utils.test_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
         pin_memory=True
     )
+    
+    loss_criterion = get_loss(loss)(temperature, cuda, tau_plus)
 
     # model setup and optimizer config
     model = Model(feature_dim, model_arch)
@@ -172,7 +144,7 @@ def main(dataset: str, root: str, batch_size: int, model_arch, *, cuda=True, wri
 
     step = 0
     for epoch in range(1, epochs + 1):
-        train_loss, step = train(model, train_loader, optimizer, batch_size, temperature, debiased, tau_plus,
+        train_loss, step = train(model, train_loader, loss_criterion, optimizer, batch_size,
                                  cuda=cuda, writer=writer, step=step)
         if epoch % 5 == 0:
             test_acc_1, test_acc_5 = test(model, memory_loader, test_loader, cuda=cuda, class_cnt=c, top_k=top_k,
@@ -197,6 +169,7 @@ def main(dataset: str, root: str, batch_size: int, model_arch, *, cuda=True, wri
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train SimCLR')
     parser.add_argument('--dataset', type=str, help='Dataset name (STL10 or CIFAR10)')
+    parser.add_argument('--loss', type=str, help='Loss name (Contrastive or DebiasedNeg or DebiasedPos)')
     parser.add_argument('--root', type=str, help='Dataset source root')
     parser.add_argument('--root_out', type=str, help='Path to store logs')
     parser.add_argument('--wandb_project', type=str, help='Project name')
@@ -209,7 +182,6 @@ if __name__ == '__main__':
     parser.add_argument('--top_k', default=200, type=int, help='Top k most similar images used to predict the label')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--debiased', default=True, type=bool, help='Debiased contrastive loss or standard loss')
 
     args = parser.parse_args()
 
@@ -220,7 +192,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(args.root_out)
 
     main(
-        args.dataset, args.root, args.batch_size, args.model_arch,
+        args.dataset, args.loss, args.root, args.batch_size, args.model_arch,
         cuda=args.cuda,
         writer=writer,
         feature_dim=args.feature_dim,
@@ -228,5 +200,4 @@ if __name__ == '__main__':
         tau_plus=args.tau_plus,
         top_k=args.top_k,
         epochs=args.epochs,
-        debiased=args.debiased,
     )
