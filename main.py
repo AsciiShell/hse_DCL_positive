@@ -109,7 +109,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
     })
     dataset_cls = get_dataset(dataset)
     train_loader = DataLoader(
-        dataset_cls(root=root, train=True, transform=utils.train_transform, tau=tau_plus),
+        dataset_cls(root=root, split="train+unlabeled", transform=utils.train_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
@@ -117,13 +117,13 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         drop_last=True,
     )
     memory_loader = DataLoader(
-        dataset_cls(root=root, train=True, transform=utils.test_transform, tau=tau_plus),
+        dataset_cls(root=root, split="train", transform=utils.test_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
         pin_memory=True)
     test_loader = DataLoader(
-        dataset_cls(root=root, train=False, transform=utils.test_transform, tau=tau_plus),
+        dataset_cls(root=root, split="test", transform=utils.test_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
@@ -168,7 +168,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train SimCLR')
-    parser.add_argument('--dataset', type=str, help='Dataset name (STL10 or CIFAR10)')
+    parser.add_argument('--dataset', type=str, help='Dataset name (STL10 or CIFAR10 or STL10Noise or CIFAR10Noise)')
     parser.add_argument('--loss', type=str, help='Loss name (Contrastive or DebiasedNeg or DebiasedPos)')
     parser.add_argument('--root', type=str, help='Dataset source root')
     parser.add_argument('--root_out', type=str, help='Path to store logs')

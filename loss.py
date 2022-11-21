@@ -141,4 +141,4 @@ def get_loss(name: str) -> typing.Union[typing.Type[ContrastiveLoss], typing.Typ
         return DebiasedNegLoss
     if name == "DebiasedPos":
         return DebiasedPosLoss
-    raise Exception("Unknown dataset {}".format(name))
+    raise Exception("Unknown loss {}".format(name))
