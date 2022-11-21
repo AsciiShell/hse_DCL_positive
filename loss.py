@@ -91,7 +91,7 @@ class DebiasedPosLoss(nn.Module):
     def __init__(self, temperature, cuda, tau_plus):
         super(DebiasedPosLoss, self).__init__()
         self.temperature = temperature
-        self.tau_plus = tau_plus
+        self.tau_plus = 1 - tau_plus
         self.cuda = cuda
         
     def get_negative_mask(self, batch_size):
@@ -120,11 +120,11 @@ class DebiasedPosLoss(nn.Module):
 
         # estimator g()
         N = batch_size * 2 - 2
-        Ng = (N * self.tau_plus - (1 - self.tau_plus)) * neg.sum(dim=-1)
+        Ng = (N * self.tau_plus - (1 - self.tau_plus)) * neg.mean(dim=-1)
         # constrain (optional)
         Ng = torch.clamp(Ng, min=N * np.e ** (-1 / self.temperature))
         
-        p = (1 - self.tau_plus) * neg.sum(dim=-1)
+        p = (1 - self.tau_plus) * neg.mean(dim=-1)
         # constrain (optional)
         p = torch.clamp(pos - p, min=np.e ** (-1 / self.temperature))
 
