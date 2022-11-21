@@ -33,7 +33,7 @@ class CIFAR10Pair(CIFAR10):
         return pos_1, pos_2, target
     
 
-class CTL10NoisePair(STL10):
+class STL10NoisePair(STL10):
     def __init__(self, tau, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.tau = tau
@@ -78,13 +78,13 @@ class CIFAR10NoisePair(CIFAR10):
         return pos_1, pos_2, target
 
 
-def get_dataset(name: str) -> typing.Union[typing.Type[STL10Pair], typing.Type[CIFAR10Pair], typing.Type[CTL10NoisePair], typing.Type[CIFAR10NoisePair]]:
+def get_dataset(name: str) -> typing.Union[typing.Type[STL10Pair], typing.Type[CIFAR10Pair], typing.Type[STL10NoisePair], typing.Type[CIFAR10NoisePair]]:
     if name == "STL10":
         return STL10Pair
     if name == "CIFAR10":
         return CIFAR10Pair
-    if name == "CTL10Noise":
-        return CTL10NoisePair
+    if name == "STL10Noise":
+        return STL10NoisePair
     if name == "CIFAR10Noise":
         return CIFAR10NoisePair
     raise Exception("Unknown dataset {}".format(name))
