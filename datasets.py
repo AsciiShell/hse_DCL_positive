@@ -46,7 +46,8 @@ class STL10NoisePair(STL10):
             pos_1 = self.transform(img)
             
             if np.random.rand() < self.tau:
-                img_rand = self.data[np.random.choice(self.data[self.labels != target].index)]
+                index = np.where(self.labels != target)[0]
+                img_rand = self.data[np.random.choice(index)]                
                 img_rand = Image.fromarray(np.transpose(img_rand, (1, 2, 0)))
                 pos_2 = self.transform(img_rand)
             else:
@@ -69,7 +70,8 @@ class CIFAR10NoisePair(CIFAR10):
             pos_1 = self.transform(img)
             
             if np.random.rand() < self.tau:
-                img_rand = self.data[np.random.choice(self.data[self.targets != target].index)]
+                index = np.where(self.targets != target)[0]
+                img_rand = self.data[np.random.choice(index)]
                 img_rand = Image.fromarray(img_rand)
                 pos_2 = self.transform(img_rand)
             else:
