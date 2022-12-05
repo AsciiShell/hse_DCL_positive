@@ -9,8 +9,8 @@ from torchvision.datasets import STL10, CIFAR10
 class STL10Pair(STL10):
     def __init__(self,
                  root: str,
-                 split: str = "train",
-                 transform: typing.Optional[typing.Callable] = None,
+                 split: str,
+                 transform: typing.Optional[typing.Callable],
                  download: bool = False):
         super().__init__(root, split, None, transform, None, download)
 
@@ -28,8 +28,8 @@ class STL10Pair(STL10):
 class CIFAR10Pair(CIFAR10):
     def __init__(self,
                  root: str,
-                 train: bool = True,
-                 transform: typing.Optional[typing.Callable] = None,
+                 train: bool,
+                 transform: typing.Optional[typing.Callable],
                  download: bool = False):
         super().__init__(root, train, transform, None, download)
         self.targets = np.array(self.targets)
@@ -49,9 +49,10 @@ class CIFAR10Pair(CIFAR10):
 class STL10NoisePair(STL10):
     def __init__(self,
                  root: str,
-                 split: str = "train",
-                 transform: typing.Optional[typing.Callable] = None,
-                 download: bool = False, tau=None):
+                 split: str,
+                 transform: typing.Optional[typing.Callable],
+                 download: bool = False, 
+                 tau=None):
         super().__init__(root, split, None, transform, None, download)
         self.tau = tau
 
@@ -78,8 +79,8 @@ class STL10NoisePair(STL10):
 class CIFAR10NoisePair(CIFAR10):
     def __init__(self,
                  root: str,
-                 train: bool = True,
-                 transform: typing.Optional[typing.Callable] = None,
+                 train: bool,
+                 transform: typing.Optional[typing.Callable],
                  download: bool = False,
                  tau=None):
         super().__init__(root, train, transform, None, download)
@@ -110,6 +111,8 @@ def get_dataset(name: str, root: str, split: str, transform=None, tau=None) -> t
     kwargs = {"root": root, "transform": transform}
     if "CIFAR" in name:
         kwargs["train"] = "train" in split
+    else:
+        kwargs["split"] = split
     if "Noise" in name:
         kwargs["tau"] = tau
     if name == "STL10":
