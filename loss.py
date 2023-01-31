@@ -12,6 +12,10 @@ class ContrastiveLoss(nn.Module):
         self.cuda = cuda
         
     def get_negative_mask(self, batch_size):
+        """
+        Дла каждого изображения отмечается исходная картинка и ее аугментация
+        Получается симметричная матрица с нулевой главной диагональю и 2мя параллельными
+        """
         negative_mask = torch.ones((batch_size, 2 * batch_size), dtype=bool)
         for i in range(batch_size):
             negative_mask[i, i] = 0
@@ -24,19 +28,22 @@ class ContrastiveLoss(nn.Module):
         batch_size = out_1.shape[0]
         
         # neg score
-        out = torch.cat([out_1, out_2], dim=0)
-        neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature)
-        mask = self.get_negative_mask(batch_size)
+        out = torch.cat([out_1, out_2], dim=0) # shape (2 * bs, fdim)
+        # скалярное произведение всех пар
+        neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature) # shape (2 * bs, 2 * bs)
+        mask = self.get_negative_mask(batch_size) # shape (2 * bs, 2 * bs)
         if self.cuda:
             mask = mask.cuda()
-        neg = neg.masked_select(mask).view(2 * batch_size, -1)
+        # оставляем только негативные примеры
+        neg = neg.masked_select(mask).view(2 * batch_size, -1) # shape (2 * bs, 2 * bs - 2)
 
         # pos score
-        pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature)
-        pos = torch.cat([pos, pos], dim=0)
+        # скалярное произведение 2х аугментаций одной картинки
+        pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature) # shape (bs)
+        pos = torch.cat([pos, pos], dim=0) # shape (2 * bs)
 
         # estimator g()
-        Ng = neg.sum(dim=-1)
+        Ng = neg.sum(dim=-1) # shape (2 * bs)
 
         # contrastive loss
         loss = (-torch.log(pos / (pos + Ng))).mean()
