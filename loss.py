@@ -23,8 +23,8 @@ def get_target_mask(target: torch.Tensor) -> torch.Tensor:
     """
     Generate bool matrix for equal targets
     """
-    target_ = torch.cat([target, target], dim=0).view(-1, 1)
-    mask = (target_ == target_.t().contiguous()) & (target_ != -1)
+    target_ = torch.cat([target, target], dim=0).view(-1, 1) # shape (2 * bs, 1)
+    mask = (target_ == target_.t().contiguous()) & (target_ != -1) # shape (2 * bs, 2 * bs)
     return mask
 
 
