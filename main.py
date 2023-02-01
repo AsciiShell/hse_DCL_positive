@@ -16,7 +16,7 @@ from loss import get_loss
 from model import Model
 
 
-def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, step=0, drop_fn=False):
+def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, step=0):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, data_loader
     for pos_1, pos_2, pos_m, target in train_bar:
@@ -150,7 +150,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         pin_memory=True
     )
 
-    loss_criterion = get_loss(loss)(temperature, cuda, tau_plus)
+    loss_criterion = get_loss(loss, temperature, cuda, tau_plus, drop_fn)
 
     # model setup and optimizer config
     model = Model(feature_dim, model_arch)
@@ -165,7 +165,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
     step = 0
     for epoch in range(1, epochs + 1):
         train_loss, step = train(model, train_loader, loss_criterion, optimizer, batch_size,
-                                 cuda=cuda, writer=writer, step=step, drop_fn=drop_fn)
+                                 cuda=cuda, writer=writer, step=step)
         if epoch % 5 == 0:
             test_acc_1, test_acc_5 = test(model, memory_loader, test_loader, cuda=cuda, class_cnt=c, top_k=top_k,
                                           temperature=temperature)
