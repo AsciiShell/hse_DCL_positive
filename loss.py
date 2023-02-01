@@ -19,6 +19,15 @@ def get_negative_mask(batch_size):
     return negative_mask
 
 
+def get_target_mask(target: torch.Tensor) -> torch.Tensor:
+    """
+    Generate bool matrix for equal targets
+    """
+    target_ = torch.cat([target, target], dim=0).view(-1, 1)
+    mask = (target_ == target_.t().contiguous()) & (target_ != -1)
+    return mask
+
+
 class ContrastiveLossBase(nn.Module):
     def __init__(self, temperature, cuda, *args, **kwargs):
         super().__init__()
@@ -31,14 +40,9 @@ class ContrastiveLossBase(nn.Module):
         # neg score
         out = torch.cat([out_1, out_2], dim=0)  # shape (2 * bs, fdim)
         # скалярное произведение всех пар
-<<<<<<< HEAD
-        neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature) # shape (2 * bs, 2 * bs)
-        # 1ая часть (2 * bs, bs) соответствует одной картинке, 2ая часть (2 * bs, bs+1 - 2 * bs) - другой
-        mask = self.get_negative_mask(batch_size) # shape (2 * bs, 2 * bs)
-=======
         neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature)  # shape (2 * bs, 2 * bs)
-        mask = get_negative_mask(batch_size)  # shape (2 * bs, 2 * bs)
->>>>>>> simplify loss funcs
+        # 1ая часть (2 * bs, bs) соответствует одной картинке, 2ая часть (2 * bs, bs+1 - 2 * bs) - другой
+        mask = self.get_negative_mask(batch_size)  # shape (2 * bs, 2 * bs)
         if self.cuda:
             mask = mask.cuda()
         # оставляем только негативные примеры
@@ -46,21 +50,16 @@ class ContrastiveLossBase(nn.Module):
 
         # pos score
         # скалярное произведение 2х аугментаций одной картинки
-<<<<<<< HEAD
-        pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature) # shape (bs)
-        # 1ая часть bs соответствует одной картинке, 2ая часть bs - другой
-        pos = torch.cat([pos, pos], dim=0) # shape (2 * bs)
-=======
         pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature)  # shape (bs)
+        # 1ая часть bs соответствует одной картинке, 2ая часть bs - другой
         pos = torch.cat([pos, pos], dim=0)  # shape (2 * bs)
->>>>>>> simplify loss funcs
 
         return pos, neg
 
 
 class ContrastiveLoss(ContrastiveLossBase):
-    def forward(self, out_1, out_2):
-        pos, neg = super()(out_1, out_2)
+    def forward(self, out_1, out_2, target):
+        pos, neg = super()(out_1, out_2, target)
         # estimator g()
         Ng = neg.sum(dim=-1)  # shape (2 * bs)
         # contrastive loss
@@ -73,18 +72,10 @@ class DebiasedNegLoss(ContrastiveLossBase):
         super().__init__(temperature, cuda)
         self.tau_plus = tau_plus
 
-<<<<<<< HEAD
     def forward(self, out_1, out_2, out_m):
-=======
-    def forward(self, out_1, out_2):
         pos, neg = super()(out_1, out_2)
->>>>>>> simplify loss funcs
         batch_size = out_1.shape[0]
 
-<<<<<<< HEAD
-        # pos score
-        pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature)
-        pos = torch.cat([pos, pos], dim=0)
         pos_m = [pos]
         for vec in out_m:
             pos_1 = torch.exp(torch.sum(out_1 * vec, dim=-1) / self.temperature)
@@ -94,8 +85,6 @@ class DebiasedNegLoss(ContrastiveLossBase):
         pos_m = torch.stack(pos_m, dim=0).mean(dim=0)
 
         # estimator g()
-=======
->>>>>>> simplify loss funcs
         N = batch_size * 2 - 2
         Ng = (-self.tau_plus * N * pos_m + neg.sum(dim=-1)) / (1 - self.tau_plus)
         # constrain (optional)
@@ -110,12 +99,8 @@ class DebiasedPosLoss(ContrastiveLossBase):
         super().__init__(temperature, cuda)
         self.tau_plus = tau_plus
 
-<<<<<<< HEAD
     def forward(self, out_1, out_2, *args):
-=======
-    def forward(self, out_1, out_2):
         pos, neg = super()(out_1, out_2)
->>>>>>> simplify loss funcs
         batch_size = out_1.shape[0]
 
         # estimator g()

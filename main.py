@@ -16,7 +16,7 @@ from loss import get_loss
 from model import Model
 
 
-def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, step=0):
+def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, step=0, drop_fn=False):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, data_loader
     for pos_1, pos_2, pos_m, target in train_bar:
@@ -25,7 +25,7 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
                 non_blocking=True), pos_2.cuda(non_blocking=True)
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
-        
+
         out_m = []
         for pos_i in pos_m:
             if cuda:
@@ -34,7 +34,7 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
             out_m.append(out_i)
 
         # contrastive loss
-        loss = loss_criterion(out_1, out_2, out_m)
+        loss = loss_criterion(out_1, out_2, out_m, target)
         writer.add_scalar("loss/train", loss, step)
         step += 1
 
@@ -109,8 +109,8 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
     return total_top1 / total_num * 100, total_top5 / total_num * 100
 
 
-def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer,
-         feature_dim=128, temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, run_uuid=None):
+def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer, feature_dim=128,
+         temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, drop_fn=False, run_uuid=None):
     wandb.config.update({
         "dataset": dataset,
         "loss": loss,
@@ -122,6 +122,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "batch_size": batch_size,
         "epochs": epochs,
         "num_pos": num_pos,
+        "drop_fn": drop_fn,
         "uuid": run_uuid,
     })
     train_loader = DataLoader(
@@ -164,7 +165,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
     step = 0
     for epoch in range(1, epochs + 1):
         train_loss, step = train(model, train_loader, loss_criterion, optimizer, batch_size,
-                                 cuda=cuda, writer=writer, step=step)
+                                 cuda=cuda, writer=writer, step=step, drop_fn=drop_fn)
         if epoch % 5 == 0:
             test_acc_1, test_acc_5 = test(model, memory_loader, test_loader, cuda=cuda, class_cnt=c, top_k=top_k,
                                           temperature=temperature)
