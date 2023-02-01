@@ -54,7 +54,7 @@ class ContrastiveLoss(nn.Module):
     
     
 class DebiasedNegLoss(nn.Module):
-    def __init__(self, temperature, cuda, tau_plus, *args, **kwargs):
+    def __init__(self, temperature, cuda, tau_plus):
         super(DebiasedNegLoss, self).__init__()
         self.temperature = temperature
         self.tau_plus = tau_plus
@@ -69,7 +69,7 @@ class DebiasedNegLoss(nn.Module):
         negative_mask = torch.cat((negative_mask, negative_mask), 0)
         return negative_mask
 
-    def forward(self, out_1, out_2, out_m=[]):
+    def forward(self, out_1, out_2, out_m):
         batch_size = out_1.shape[0]
         
         # neg score
@@ -104,7 +104,7 @@ class DebiasedNegLoss(nn.Module):
     
     
 class DebiasedPosLoss(nn.Module):
-    def __init__(self, temperature, cuda, tau_plus, *args, **kwargs):
+    def __init__(self, temperature, cuda, tau_plus):
         super(DebiasedPosLoss, self).__init__()
         self.temperature = temperature
         self.tau_plus = 1 - tau_plus

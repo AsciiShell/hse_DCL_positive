@@ -121,6 +121,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "k": top_k,
         "batch_size": batch_size,
         "epochs": epochs,
+        "num_pos": num_pos,
         "uuid": run_uuid,
     })
     train_loader = DataLoader(
@@ -209,6 +210,8 @@ if __name__ == '__main__':
                         help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int,
                         help='Number of sweeps over the dataset to train')
+    parser.add_argument('--num_pos', default=1, type=int,
+                        help='Number of positive samples in loss while train')
 
     args = parser.parse_args()
 
@@ -227,4 +230,5 @@ if __name__ == '__main__':
         tau_plus=args.tau_plus,
         top_k=args.top_k,
         epochs=args.epochs,
+        num_pos=args.num_pos,
     )
