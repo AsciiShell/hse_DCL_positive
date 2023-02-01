@@ -10,9 +10,11 @@ class STL10Pair(STL10):
     def __init__(self,
                  root: str,
                  split: str,
+                 num_pos: int,
                  transform: typing.Optional[typing.Callable],
                  download: bool = False):
         super().__init__(root, split, None, transform, None, download)
+        self.num_pos = num_pos
 
     def __getitem__(self, index):
         img, target = self.data[index], self.labels[index]
@@ -21,19 +23,25 @@ class STL10Pair(STL10):
         if self.transform is not None:
             pos_1 = self.transform(img)
             pos_2 = self.transform(img)
+            
+            pos_m = []
+            for i in range(self.num_pos-1):
+                pos_m.append(self.transform(img))
 
-        return pos_1, pos_2, target
+        return pos_1, pos_2, pos_m, target
 
 
 class CIFAR10Pair(CIFAR10):
     def __init__(self,
                  root: str,
                  train: bool,
+                 num_pos: int,
                  transform: typing.Optional[typing.Callable],
                  download: bool = False):
         super().__init__(root, train, transform, None, download)
         self.targets = np.array(self.targets)
         self.labels = self.targets
+        self.num_pos = num_pos
 
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
@@ -42,19 +50,25 @@ class CIFAR10Pair(CIFAR10):
         if self.transform is not None:
             pos_1 = self.transform(img)
             pos_2 = self.transform(img)
+            
+            pos_m = []
+            for i in range(self.num_pos-1):
+                pos_m.append(self.transform(img))
 
-        return pos_1, pos_2, target
+        return pos_1, pos_2, pos_m, target
 
 
 class STL10NoisePair(STL10):
     def __init__(self,
                  root: str,
                  split: str,
+                 num_pos: int,
                  transform: typing.Optional[typing.Callable],
                  download: bool = False, 
                  tau=None):
         super().__init__(root, split, None, transform, None, download)
         self.tau = tau
+        self.num_pos = num_pos
 
     def __getitem__(self, index):
         img, target = self.data[index], self.labels[index]
@@ -72,14 +86,19 @@ class STL10NoisePair(STL10):
                 pos_2 = self.transform(img_rand)
             else:
                 pos_2 = self.transform(img)
+                
+            pos_m = []
+            for i in range(self.num_pos-1):
+                pos_m.append(self.transform(img))
 
-        return pos_1, pos_2, target
+        return pos_1, pos_2, pos_m, target
 
 
 class CIFAR10NoisePair(CIFAR10):
     def __init__(self,
                  root: str,
                  train: bool,
+                 num_pos: int,
                  transform: typing.Optional[typing.Callable],
                  download: bool = False,
                  tau=None):
@@ -87,6 +106,7 @@ class CIFAR10NoisePair(CIFAR10):
         self.targets = np.array(self.targets)
         self.labels = self.targets
         self.tau = tau
+        self.num_pos = num_pos
 
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
@@ -103,12 +123,16 @@ class CIFAR10NoisePair(CIFAR10):
                 pos_2 = self.transform(img_rand)
             else:
                 pos_2 = self.transform(img)
+                
+            pos_m = []
+            for i in range(self.num_pos-1):
+                pos_m.append(self.transform(img))
 
-        return pos_1, pos_2, target
+        return pos_1, pos_2, pos_m, target
 
 
-def get_dataset(name: str, root: str, split: str, transform=None, tau=None) -> torch.utils.data.Dataset:
-    kwargs = {"root": root, "transform": transform}
+def get_dataset(name: str, root: str, split: str, num_pos: int, transform=None, tau=None) -> torch.utils.data.Dataset:
+    kwargs = {"root": root, "transform": transform, "num_pos": num_pos}
     if "CIFAR" in name:
         kwargs["train"] = "train" in split
     else:

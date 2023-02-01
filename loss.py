@@ -24,13 +24,14 @@ class ContrastiveLoss(nn.Module):
         negative_mask = torch.cat((negative_mask, negative_mask), 0)
         return negative_mask
 
-    def forward(self, out_1, out_2):
+    def forward(self, out_1, out_2, *args):
         batch_size = out_1.shape[0]
         
         # neg score
         out = torch.cat([out_1, out_2], dim=0) # shape (2 * bs, fdim)
         # скалярное произведение всех пар
         neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature) # shape (2 * bs, 2 * bs)
+        # 1ая часть (2 * bs, bs) соответствует одной картинке, 2ая часть (2 * bs, bs+1 - 2 * bs) - другой
         mask = self.get_negative_mask(batch_size) # shape (2 * bs, 2 * bs)
         if self.cuda:
             mask = mask.cuda()
@@ -40,6 +41,7 @@ class ContrastiveLoss(nn.Module):
         # pos score
         # скалярное произведение 2х аугментаций одной картинки
         pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature) # shape (bs)
+        # 1ая часть bs соответствует одной картинке, 2ая часть bs - другой
         pos = torch.cat([pos, pos], dim=0) # shape (2 * bs)
 
         # estimator g()
@@ -67,7 +69,7 @@ class DebiasedNegLoss(nn.Module):
         negative_mask = torch.cat((negative_mask, negative_mask), 0)
         return negative_mask
 
-    def forward(self, out_1, out_2):
+    def forward(self, out_1, out_2, out_m):
         batch_size = out_1.shape[0]
         
         # neg score
@@ -81,10 +83,17 @@ class DebiasedNegLoss(nn.Module):
         # pos score
         pos = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature)
         pos = torch.cat([pos, pos], dim=0)
+        pos_m = [pos]
+        for vec in out_m:
+            pos_1 = torch.exp(torch.sum(out_1 * vec, dim=-1) / self.temperature)
+            pos_2 = torch.exp(torch.sum(out_2 * vec, dim=-1) / self.temperature)
+            pos_new = torch.cat([pos_1, pos_2], dim=0)
+            pos_m.append(pos_new)
+        pos_m = torch.stack(pos_m, dim=0).mean(dim=0)
 
         # estimator g()
         N = batch_size * 2 - 2
-        Ng = (-self.tau_plus * N * pos + neg.sum(dim=-1)) / (1 - self.tau_plus)
+        Ng = (-self.tau_plus * N * pos_m + neg.sum(dim=-1)) / (1 - self.tau_plus)
         # constrain (optional)
         Ng = torch.clamp(Ng, min=N * np.e ** (-1 / self.temperature))
 
@@ -110,7 +119,7 @@ class DebiasedPosLoss(nn.Module):
         negative_mask = torch.cat((negative_mask, negative_mask), 0)
         return negative_mask
 
-    def forward(self, out_1, out_2):
+    def forward(self, out_1, out_2, *args):
         batch_size = out_1.shape[0]
         
         # neg score
