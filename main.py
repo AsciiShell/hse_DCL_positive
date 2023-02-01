@@ -19,15 +19,22 @@ from model import Model
 def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, step=0):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, data_loader
-    for pos_1, pos_2, target in train_bar:
+    for pos_1, pos_2, pos_m, target in train_bar:
         if cuda:
             pos_1, pos_2 = pos_1.cuda(
                 non_blocking=True), pos_2.cuda(non_blocking=True)
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
+        
+        out_m = []
+        for pos_i in pos_m:
+            if cuda:
+                pos_i = pos_i.cuda(non_blocking=True)
+            feature_i, out_i = net(pos_i)
+            out_m.append(out_i)
 
         # contrastive loss
-        loss = loss_criterion(out_1, out_2)
+        loss = loss_criterion(out_1, out_2, out_m)
         writer.add_scalar("loss/train", loss, step)
         step += 1
 
@@ -49,7 +56,7 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
     with torch.no_grad():
         # generate feature bank
-        for data, _, target in memory_data_loader:
+        for data, _, _, target in memory_data_loader:
             if cuda:
                 data = data.cuda(non_blocking=True)
             feature, out = net(data)
@@ -62,7 +69,7 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
             memory_data_loader.dataset.labels, device=feature_bank.device)
         # loop test data to predict the label by weighted knn search
         test_bar = test_data_loader
-        for data, _, target in test_bar:
+        for data, _, _, target in test_bar:
             if cuda:
                 data, target = data.cuda(
                     non_blocking=True), target.cuda(non_blocking=True)
@@ -103,7 +110,7 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
 
 
 def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer,
-         feature_dim=128, temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, run_uuid=None):
+         feature_dim=128, temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, run_uuid=None):
     wandb.config.update({
         "dataset": dataset,
         "loss": loss,
@@ -117,7 +124,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "uuid": run_uuid,
     })
     train_loader = DataLoader(
-        get_dataset(dataset, root=root, split="train+unlabeled",
+        get_dataset(dataset, root=root, split="train+unlabeled", num_pos=num_pos,
                     transform=utils.train_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=True,
@@ -126,14 +133,14 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         drop_last=True,
     )
     memory_loader = DataLoader(
-        get_dataset(dataset, root=root, split="train",
+        get_dataset(dataset, root=root, split="train", num_pos=1,
                     transform=utils.test_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
         pin_memory=True)
     test_loader = DataLoader(
-        get_dataset(dataset, root=root, split="test",
+        get_dataset(dataset, root=root, split="test", num_pos=1,
                     transform=utils.test_transform, tau=tau_plus),
         batch_size=batch_size,
         shuffle=False,
