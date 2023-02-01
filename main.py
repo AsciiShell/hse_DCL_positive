@@ -25,7 +25,7 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
                 non_blocking=True), pos_2.cuda(non_blocking=True)
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
-        
+
         out_m = []
         for pos_i in pos_m:
             if cuda:
@@ -34,7 +34,7 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
             out_m.append(out_i)
 
         # contrastive loss
-        loss = loss_criterion(out_1, out_2, out_m)
+        loss = loss_criterion(out_1, out_2, out_m, target)
         writer.add_scalar("loss/train", loss, step)
         step += 1
 
@@ -109,8 +109,8 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
     return total_top1 / total_num * 100, total_top5 / total_num * 100
 
 
-def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer,
-         feature_dim=128, temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, run_uuid=None):
+def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer, feature_dim=128,
+         temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, drop_fn=False, run_uuid=None):
     wandb.config.update({
         "dataset": dataset,
         "loss": loss,
@@ -122,6 +122,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "batch_size": batch_size,
         "epochs": epochs,
         "num_pos": num_pos,
+        "drop_fn": drop_fn,
         "uuid": run_uuid,
     })
     train_loader = DataLoader(
@@ -149,7 +150,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         pin_memory=True
     )
 
-    loss_criterion = get_loss(loss)(temperature, cuda, tau_plus)
+    loss_criterion = get_loss(loss, temperature, cuda, tau_plus, drop_fn)
 
     # model setup and optimizer config
     model = Model(feature_dim, model_arch)
@@ -196,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_project', type=str, help='Project name')
     parser.add_argument('--model_arch', type=str,
                         help='Model architecture (resnet18/34/50')
-    parser.add_argument('--cuda', default=True, type=bool, help='Use cuda')
+    parser.add_argument('--cuda', help='Use cuda', action=argparse.BooleanOptionalAction)
 
     parser.add_argument('--feature_dim', default=128,
                         type=int, help='Feature dim for latent vector')
@@ -210,8 +211,8 @@ if __name__ == '__main__':
                         help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int,
                         help='Number of sweeps over the dataset to train')
-    parser.add_argument('--num_pos', default=1, type=int,
-                        help='Number of positive samples in loss while train')
+    parser.add_argument('--num_pos', default=1, type=int, help='Number of positive samples in loss while train')
+    parser.add_argument('--drop_fn', help='Drop false negative samples', action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
