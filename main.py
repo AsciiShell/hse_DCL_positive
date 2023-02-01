@@ -197,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_project', type=str, help='Project name')
     parser.add_argument('--model_arch', type=str,
                         help='Model architecture (resnet18/34/50')
-    parser.add_argument('--cuda', default=True, type=bool, help='Use cuda')
+    parser.add_argument('--cuda', help='Use cuda', action=argparse.BooleanOptionalAction)
 
     parser.add_argument('--feature_dim', default=128,
                         type=int, help='Feature dim for latent vector')
@@ -211,8 +211,8 @@ if __name__ == '__main__':
                         help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int,
                         help='Number of sweeps over the dataset to train')
-    parser.add_argument('--num_pos', default=1, type=int,
-                        help='Number of positive samples in loss while train')
+    parser.add_argument('--num_pos', default=1, type=int, help='Number of positive samples in loss while train')
+    parser.add_argument('--drop_fn', help='Drop false negative samples', action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
