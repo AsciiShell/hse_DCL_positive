@@ -23,8 +23,8 @@ def get_target_mask(target: torch.Tensor) -> torch.Tensor:
     """
     Generate bool matrix for equal targets
     """
-    target_ = torch.cat([target, target], dim=0).view(-1, 1) # shape (2 * bs, 1)
-    mask = (target_ == target_.t().contiguous()) & (target_ != -1) # shape (2 * bs, 2 * bs)
+    target_ = torch.cat([target, target], dim=0).view(-1, 1)  # shape (2 * bs, 1)
+    mask = (target_ == target_.t().contiguous()) & (target_ != -1)  # shape (2 * bs, 2 * bs)
     return mask
 
 
@@ -125,6 +125,46 @@ class DebiasedPosLoss(ContrastiveLossBase):
         return loss
 
 
+class DebiasedPosLossV2(nn.Module):
+    def __init__(self, temperature, cuda, drop_fn, tau_plus):
+        super().__init__()
+        self.temperature: float = temperature
+        self.cuda: bool = cuda
+        self.drop_fn: bool = drop_fn
+        self.tau_plus: float = tau_plus
+
+    def forward(self, out_1, out_2, out_m, target):
+        batch_size = out_1.shape[0]
+
+        # estimator g()
+        N = batch_size * 2 - 2
+        # neg score
+        out = torch.cat([out_1, out_2], dim=0)  # shape (2 * bs, fdim)
+        # скалярное произведение всех пар
+        neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature)  # shape (2 * bs, 2 * bs)
+        # Drop false-negaive pairs
+        if self.drop_fn:
+            mask = get_target_mask(target)
+            if self.cuda:
+                mask = mask.cuda()
+            neg = neg.masked_fill(mask, 0.0)
+
+        # 1ая часть (2 * bs, bs) соответствует одной картинке, 2ая часть (2 * bs, bs+1 - 2 * bs) - другой
+        mask = get_negative_mask(batch_size)  # shape (2 * bs, 2 * bs)
+        if self.cuda:
+            mask = mask.cuda()
+
+        full = neg.sum(dim=-1)  # shape (2 * bs)
+        # оставляем только негативные примеры
+        neg = neg.masked_select(mask).view(2 * batch_size, -1)  # shape (2 * bs, 2 * bs - 2)
+        Ng = neg.sum(dim=-1)  # shape (2 * bs)
+
+        o = (full - self.tau_plus * Ng) / N / self.tau_plus  # shape (2 * bs)
+
+        loss = (-torch.log(o / (o + Ng))).mean()
+        return loss
+
+
 def get_loss(name: str, temperature: float, cuda: bool, tau_plus: float, drop_fn: bool) -> nn.Module:
     if name == "Contrastive":
         return ContrastiveLoss(temperature, cuda, drop_fn)
@@ -132,4 +172,6 @@ def get_loss(name: str, temperature: float, cuda: bool, tau_plus: float, drop_fn
         return DebiasedNegLoss(temperature, cuda, drop_fn, tau_plus)
     if name == "DebiasedPos":
         return DebiasedPosLoss(temperature, cuda, drop_fn, tau_plus)
+    if name == "DebiasedPosV2":
+        return DebiasedPosLossV2(temperature, cuda, drop_fn, tau_plus)
     raise Exception("Unknown loss {}".format(name))
