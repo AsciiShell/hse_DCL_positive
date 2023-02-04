@@ -142,6 +142,7 @@ class DebiasedPosLossV2(nn.Module):
         out = torch.cat([out_1, out_2], dim=0)  # shape (2 * bs, fdim)
         # скалярное произведение всех пар
         neg = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature)  # shape (2 * bs, 2 * bs)
+        full = neg.sum(dim=-1)  # shape (2 * bs)
         # Drop false-negaive pairs
         if self.drop_fn:
             mask = get_target_mask(target)
@@ -154,14 +155,14 @@ class DebiasedPosLossV2(nn.Module):
         if self.cuda:
             mask = mask.cuda()
 
-        full = neg.sum(dim=-1)  # shape (2 * bs)
         # оставляем только негативные примеры
         neg = neg.masked_select(mask).view(2 * batch_size, -1)  # shape (2 * bs, 2 * bs - 2)
         Ng = neg.sum(dim=-1)  # shape (2 * bs)
 
-        o = (full - self.tau_plus * Ng) / N / self.tau_plus  # shape (2 * bs)
+        o1 = full - self.tau_plus * Ng # shape (2 * bs)
+        o2 = full + (N * self.tau_plus - (1 - self.tau_plus)) * Ng # shape (2 * bs)
 
-        loss = (-torch.log(o / (o + Ng))).mean()
+        loss = (-torch.log(o1 / o2)).mean()
         return loss
 
 
