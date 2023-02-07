@@ -44,8 +44,8 @@ test_transform = transforms.Compose([
 class MAggMode(enum.Enum):
     """Define aggregation mode for loss with M > 1
 
-    mean (only for debiased neg loss) - calculate mean value for `pos` part
-    combination - calculate all pairs combination for out array
+    pos_grouping (only for debiased neg loss) - calculate mean value for `pos` part augmentations
+    loss_combination - calculate mean loss for all pairs combinations losses
     """
-    mean = enum.auto()
-    combination = enum.auto()
+    pos_grouping = enum.auto()
+    loss_combination = enum.auto()

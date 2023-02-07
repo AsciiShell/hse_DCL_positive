@@ -1,5 +1,6 @@
 import argparse
 import os
+import itertools
 
 import numpy as np
 import torch
@@ -21,20 +22,30 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
     total_loss, total_num, train_bar = 0.0, 0, data_loader
     for pos_1, pos_2, pos_m, target in train_bar:
         if cuda:
-            pos_1, pos_2 = pos_1.cuda(
-                non_blocking=True), pos_2.cuda(non_blocking=True)
+            pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
+            pos_m = [pos.cuda(non_blocking=True) for pos in pos_m]
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
 
-        out_m = []
-        for pos_i in pos_m:
-            if cuda:
-                pos_i = pos_i.cuda(non_blocking=True)
-            feature_i, out_i = net(pos_i)
-            out_m.append(out_i)
+        if m_agg_mode == utils.MAggMode.pos_grouping:
+            out_m = []
+            for pos_i in pos_m:
+                feature_i, out_i = net(pos_i)
+                out_m.append(out_i)
+            loss = loss_criterion(out_1, out_2, out_m, target)
+        elif m_agg_mode == utils.MAggMode.loss_combination:
+            out_m = [out_1, out_2]
+            for pos_i in pos_m:
+                feature_i, out_i = net(pos_i)
+                out_m.append(out_i)
+            losses = []
+            for i in range(len(out_m)):
+                for j in range(i + 1, len(out_m)):
+                    losses.append(loss_criterion(out_m[i], out_m[j], [], target))
+            loss = torch.stack(losses).mean()
+        else:
+            raise Exception(f"Unknown m_agg_mode '{m_agg_mode}'")
 
-        # contrastive loss
-        loss = loss_criterion(out_1, out_2, out_m, target)
         writer.add_scalar("loss/train", loss, step)
         step += 1
 
@@ -130,12 +141,12 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
     })
 
     m_agg_mode = utils.MAggMode[m_agg_mode]
-    if m_agg_mode == utils.MAggMode.mean and loss != "DebiasedNeg" and num_pos > 1:
+    if m_agg_mode == utils.MAggMode.pos_grouping and loss != "DebiasedNeg" and num_pos > 1:
         raise Exception("Mean aggregation only available in DebiasedNeg loss")
 
     train_loader = DataLoader(
         get_dataset(dataset, root=root, split="train+unlabeled", num_pos=num_pos,
-                    transform=utils.train_transform, tau=noise_frac),
+                    transform=utils.train_transform, noise_frac=noise_frac),
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
@@ -143,13 +154,12 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         drop_last=True,
     )
     memory_loader = DataLoader(
-        get_dataset(dataset, root=root, split="train", num_pos=1, transform=utils.test_transform, tau=noise_frac),
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True)
+        get_dataset(
+            dataset, root=root, split="train", num_pos=1, transform=utils.test_transform,
+            noise_frac=noise_frac),
+        batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     test_loader = DataLoader(
-        get_dataset(dataset, root=root, split="test", num_pos=1, transform=utils.test_transform, tau=noise_frac),
+        get_dataset(dataset, root=root, split="test", num_pos=1, transform=utils.test_transform, noise_frac=noise_frac),
         batch_size=batch_size,
         shuffle=False,
         num_workers=4,
