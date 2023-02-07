@@ -122,7 +122,7 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
 
 def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer, feature_dim=128,
          temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, drop_fn=False, noise_frac=0.0,
-         m_agg_mode="mean", run_uuid=None):
+         m_agg_mode="m_agg_mode", run_uuid=None):
     wandb.config.update({
         "dataset": dataset,
         "loss": loss,
@@ -135,7 +135,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "epochs": epochs,
         "num_pos": num_pos,
         "drop_fn": drop_fn,
-        "noise_frac": noise_frac,
+        "noise_frac": noise_frac or 0.0,
         "m_agg_mode": m_agg_mode,
         "uuid": run_uuid,
     })
