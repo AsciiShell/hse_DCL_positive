@@ -1,3 +1,4 @@
+import enum
 import cv2
 import numpy as np
 from torchvision import transforms
@@ -38,3 +39,13 @@ train_transform = transforms.Compose([
 test_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+
+
+class MAggMode(enum.Enum):
+    """Define aggregation mode for loss with M > 1
+
+    pos_grouping (only for debiased neg loss) - calculate mean value for `pos` part augmentations
+    loss_combination - calculate mean loss for all pairs combinations losses
+    """
+    pos_grouping = enum.auto()
+    loss_combination = enum.auto()
