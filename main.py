@@ -1,6 +1,7 @@
 import argparse
 import os
 import itertools
+import logging
 
 import numpy as np
 import torch
@@ -15,6 +16,8 @@ import utils
 from datasets import get_dataset
 from loss import get_loss
 from model import Model
+
+logger = logging.getLogger(__name__)
 
 
 def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, m_agg_mode, step=0):
@@ -123,7 +126,7 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
 def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer, feature_dim=128,
          temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, drop_fn=False, noise_frac=0.0,
          m_agg_mode="loss_combination", run_uuid=None):
-    wandb.config.update({
+    config = {
         "dataset": dataset,
         "loss": loss,
         "model": model_arch,
@@ -138,8 +141,9 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "noise_frac": noise_frac or 0.0,
         "m_agg_mode": m_agg_mode,
         "uuid": run_uuid,
-    })
-
+    }
+    wandb.config.update(config)
+    logger.info("\nStart experiment with config: %s\n", config)
     m_agg_mode = utils.MAggMode[m_agg_mode]
     if m_agg_mode == utils.MAggMode.pos_grouping and loss != "DebiasedNeg" and num_pos > 1:
         raise Exception("Mean aggregation only available in DebiasedNeg loss")
@@ -153,11 +157,13 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         pin_memory=True,
         drop_last=True,
     )
+    logger.info("Train dataset: %r", train_loader.dataset)
     memory_loader = DataLoader(
         get_dataset(
             dataset, root=root, split="train", num_pos=1, transform=utils.test_transform,
             noise_frac=noise_frac),
         batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    logger.info("Memory dataset: %r", memory_loader.dataset)
     test_loader = DataLoader(
         get_dataset(dataset, root=root, split="test", num_pos=1, transform=utils.test_transform, noise_frac=noise_frac),
         batch_size=batch_size,
@@ -165,18 +171,21 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         num_workers=4,
         pin_memory=True
     )
+    logger.info("Test dataset: %r", test_loader.dataset)
 
     loss_criterion = get_loss(loss, temperature, cuda, tau_plus, drop_fn)
+    logger.info("Loss: %r", loss_criterion)
 
     # model setup and optimizer config
     model = Model(feature_dim, model_arch)
     if cuda:
         model = model.cuda()
     model = nn.DataParallel(model)
+    logger.info("Model: %r", model)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
     c = len(memory_loader.dataset.classes)
-    print("# Classes: {}".format(c))
+    logger.info("Classes: %d", c)
 
     step = 0
     for epoch in range(1, epochs + 1):
@@ -194,7 +203,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
                 "acc1": test_acc_1,
                 "acc5": test_acc_5,
             })
-
+            logger.info("Epoch %d, acc1: %f", epoch, test_acc_1)
             art = wandb.Artifact(f"model_{epoch}", type="model")
             art.add_file(model_path)
             wandb.log_artifact(art)

@@ -1,4 +1,5 @@
 import typing
+import logging
 
 import torch
 import numpy as np
@@ -40,6 +41,9 @@ class STL10Pair(STL10):
 
         return pos_1, pos_2, pos_m, target
 
+    def extra_repr(self):
+        return "Noise frac: {}\nNum Pos: {}".format(self.noise_frac, self.num_pos)
+
 
 class CIFAR10Pair(CIFAR10):
     def __init__(self,
@@ -76,19 +80,13 @@ class CIFAR10Pair(CIFAR10):
 
         return pos_1, pos_2, pos_m, target
 
+    def extra_repr(self):
+        return "Noise frac: {}\nNum Pos: {}".format(self.noise_frac, self.num_pos)
+
 
 def get_dataset(name: str, root: str, split: str, num_pos: int, transform=None, noise_frac=None) -> torch.utils.data.Dataset:
-    kwargs = {"root": root, "transform": transform, "num_pos": num_pos}
-    if "CIFAR" in name:
-        kwargs["train"] = "train" in split
-    else:
-        kwargs["split"] = split
-    if "Noise" in name:
-        kwargs["noise_frac"] = noise_frac
     if name == "STL10":
-        base_cls = STL10Pair
+        return STL10Pair(root, split, num_pos=num_pos, transform=transform, noise_frac=noise_frac, )
     elif name == "CIFAR10":
-        base_cls = CIFAR10Pair
-    else:
-        raise Exception("Unknown dataset {}".format(name))
-    return base_cls(**kwargs)
+        return CIFAR10Pair(root, train="train" in split, num_pos=num_pos, transform=transform, noise_frac=noise_frac, )
+    raise Exception("Unknown dataset {}".format(name))

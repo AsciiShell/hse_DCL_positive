@@ -64,6 +64,9 @@ class ContrastiveLossBase(nn.Module):
 
         return pos, neg
 
+    def extra_repr(self):
+        return "Temperature: {}\nCuda: {}\nDrop FN".format(self.temperature, self.cuda, self.drop_fn)
+
 
 class ContrastiveLoss(ContrastiveLossBase):
     def forward(self, out_1, out_2, out_m, target):
@@ -101,6 +104,9 @@ class DebiasedNegLoss(ContrastiveLossBase):
         loss = (-torch.log(pos / (pos + Ng))).mean()
         return loss
 
+    def extra_repr(self):
+        return "Tau plus: {}".format(self.tau_plus)
+
 
 class DebiasedPosLoss(ContrastiveLossBase):
     def __init__(self, temperature, cuda, drop_fn, tau_plus):
@@ -123,6 +129,9 @@ class DebiasedPosLoss(ContrastiveLossBase):
         # contrastive loss
         loss = (-torch.log(p / (pos + Ng))).mean()
         return loss
+
+    def extra_repr(self):
+        return "Tau plus: {}".format(self.tau_plus)
 
 
 class DebiasedPosLossV2(nn.Module):
@@ -159,11 +168,15 @@ class DebiasedPosLossV2(nn.Module):
         neg = neg.masked_select(mask).view(2 * batch_size, -1)  # shape (2 * bs, 2 * bs - 2)
         Ng = neg.sum(dim=-1)  # shape (2 * bs)
 
-        o1 = full - (1 - self.tau_plus) * Ng # shape (2 * bs)
-        o2 = full + (N * self.tau_plus - (1 - self.tau_plus)) * Ng # shape (2 * bs)
+        o1 = full - (1 - self.tau_plus) * Ng  # shape (2 * bs)
+        o2 = full + (N * self.tau_plus - (1 - self.tau_plus)) * Ng  # shape (2 * bs)
 
         loss = (-torch.log(o1 / o2)).mean()
         return loss
+
+    def extra_repr(self):
+        return "Temperature: {}\nCuda: {}\nDrop FN{}\nTau plus: {}".format(
+            self.temperature, self.cuda, self.drop_fn, self.tau_plus)
 
 
 def get_loss(name: str, temperature: float, cuda: bool, tau_plus: float, drop_fn: bool) -> nn.Module:
