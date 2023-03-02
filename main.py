@@ -2,6 +2,7 @@ import argparse
 import os
 import itertools
 import logging
+import time
 
 import numpy as np
 import torch
@@ -23,10 +24,12 @@ logger = logging.getLogger(__name__)
 def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda=True, writer, m_agg_mode, step=0):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, data_loader
+    t_start = time.time()
     for pos_1, pos_2, pos_m, target in train_bar:
         if cuda:
             pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
             pos_m = [pos.cuda(non_blocking=True) for pos in pos_m]
+        t_extract_image = time.time()
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
 
@@ -35,12 +38,14 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
             for pos_i in pos_m:
                 feature_i, out_i = net(pos_i)
                 out_m.append(out_i)
+            t_forward_pass = time.time()
             loss = loss_criterion(out_1, out_2, out_m, target)
         elif m_agg_mode == utils.MAggMode.loss_combination:
             out_m = [out_1, out_2]
             for pos_i in pos_m:
                 feature_i, out_i = net(pos_i)
                 out_m.append(out_i)
+            t_forward_pass = time.time()
             losses = []
             for i in range(len(out_m)):
                 for j in range(i + 1, len(out_m)):
@@ -48,19 +53,38 @@ def train(net, data_loader, loss_criterion, train_optimizer, batch_size, *, cuda
             loss = torch.stack(losses).mean()
         else:
             raise Exception(f"Unknown m_agg_mode '{m_agg_mode}'")
-
-        writer.add_scalar("loss/train", loss, step)
+        t_loss_calculated = time.time()
         step += 1
 
         train_optimizer.zero_grad()
         loss.backward()
+        t_backward_pass = time.time()
         train_optimizer.step()
+        t_optimizing = time.time()
+
+        global_grad_norm = torch.zeros(1)
+        if cuda:
+            global_grad_norm = global_grad_norm.cuda()
+        for group in train_optimizer.param_groups:
+            for p in group['params']:
+                if p.grad is not None:
+                    grad = p.grad
+                    global_grad_norm.add_(grad.pow(2).sum())
+        global_grad_norm = torch.sqrt(global_grad_norm).cpu()
+
+        writer.add_scalar("loss/train", loss, step)
+        writer.add_scalar("grad/global_grad_norm", global_grad_norm, step)
+        writer.add_scalar("time/01_extract_image", t_extract_image - t_start, step)
+        writer.add_scalar("time/02_forward_pass", t_forward_pass - t_extract_image, step)
+        writer.add_scalar("time/03_loss_calculated", t_loss_calculated - t_forward_pass, step)
+        writer.add_scalar("time/04_backward_pass", t_backward_pass - t_loss_calculated, step)
+        writer.add_scalar("time/05_optimizing", t_optimizing - t_backward_pass, step)
 
         total_num += batch_size
         total_loss += loss.item() * batch_size
 
         # train_bar.set_description("Train Epoch: [{}/{}] Loss: {:.4f}".format(epoch, epochs, total_loss / total_num))
-
+        t_start = time.time()
     return total_loss / total_num, step
 
 
