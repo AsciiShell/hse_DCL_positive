@@ -149,7 +149,9 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
 
 def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer, feature_dim=128,
          temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, drop_fn=False, noise_frac=0.0,
-         m_agg_mode="loss_combination", run_uuid=None):
+         m_agg_mode="loss_combination", run_uuid=None,
+         lr=1e-3, weight_decay=1e-6,
+         ):
     config = {
         "dataset": dataset,
         "loss": loss,
@@ -164,6 +166,8 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
         "drop_fn": drop_fn,
         "noise_frac": noise_frac or 0.0,
         "m_agg_mode": m_agg_mode,
+        "lr": lr,
+        "weight_decay": weight_decay,
         "uuid": run_uuid,
     }
     wandb.config.update(config)
@@ -207,7 +211,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
     model = nn.DataParallel(model)
     logger.info("Model: %r", model)
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     c = len(memory_loader.dataset.classes)
     logger.info("Classes: %d", c)
 
@@ -228,9 +232,9 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
                 "acc5": test_acc_5,
             })
             logger.info("Epoch %d, acc1: %f", epoch, test_acc_1)
-            art = wandb.Artifact(f"model_{epoch}", type="model")
-            art.add_file(model_path)
-            wandb.log_artifact(art)
+            # art = wandb.Artifact(f"model_{epoch}", type="model")
+            # art.add_file(model_path)
+            # wandb.log_artifact(art)
         writer.flush()
     writer.close()
 
@@ -263,6 +267,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_pos', default=1, type=int, help='Number of positive samples in loss while train')
     parser.add_argument('--drop_fn', help='Drop false negative samples', action=argparse.BooleanOptionalAction)
     parser.add_argument('--noise_frac', default=0.0, type=float, help='Fraction of noise augmentations')
+    parser.add_argument('--lr', default=1e-3, type=float, )
+    parser.add_argument('--weight_decay', default=1e-6, type=float,)
     parser.add_argument('--m_agg_mode', default="mean", type=str, help='loss aggregation mode')
 
     args = parser.parse_args()
@@ -285,4 +291,6 @@ if __name__ == '__main__':
         num_pos=args.num_pos,
         noise_frac=args.noise_frac,
         m_agg_mode=args.m_agg_mode,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
     )
