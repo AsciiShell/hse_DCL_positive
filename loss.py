@@ -179,7 +179,37 @@ class DebiasedPosLossV2(nn.Module):
             self.temperature, self.cuda, self.drop_fn, self.tau_plus)
 
 
-def get_loss(name: str, temperature: float, cuda: bool, tau_plus: float, drop_fn: bool) -> nn.Module:
+class CombinationLoss(nn.Module):
+    def __init__(self, temperature, cuda, drop_fn, tau_plus, alpha):
+        super().__init__()
+        self.temperature: float = temperature
+        self.cuda: bool = cuda
+        self.drop_fn: bool = drop_fn
+        self.tau_plus: float = tau_plus
+        self.alpha = alpha
+        assert 0. <= alpha <= 1.0, "Alpha should be between 0 and 1"
+        self.pos = DebiasedPosLossV2(temperature, cuda, drop_fn, tau_plus)
+        self.neg = DebiasedNegLoss(temperature, cuda, drop_fn, tau_plus)
+
+    def forward(self, out_1, out_2, out_m, target):
+        loss_neg = self.neg(out_1, out_2, out_m, target)
+        loss_pos = self.pos(out_1, out_2, out_m, target)
+        return self.alpha * loss_neg + (1. - self.alpha) * loss_pos
+
+    def extra_repr(self):
+        return "Temperature: {}\nCuda: {}\nDrop FN{}\nTau plus: {}\nAlpha: {}".format(
+            self.temperature, self.cuda, self.drop_fn, self.tau_plus, self.alpha)
+
+
+def get_loss(
+    name: str,
+    temperature: float,
+    cuda: bool,
+    tau_plus: float,
+    drop_fn: bool,
+    alpha: typing.Optional[float],
+) -> nn.Module:
+
     if name == "Contrastive":
         return ContrastiveLoss(temperature, cuda, drop_fn)
     if name == "DebiasedNeg":
@@ -188,4 +218,6 @@ def get_loss(name: str, temperature: float, cuda: bool, tau_plus: float, drop_fn
         return DebiasedPosLoss(temperature, cuda, drop_fn, tau_plus)
     if name == "DebiasedPosV2":
         return DebiasedPosLossV2(temperature, cuda, drop_fn, tau_plus)
+    if name == "Combination":
+        return CombinationLoss(temperature, cuda, drop_fn, tau_plus, alpha)
     raise Exception("Unknown loss {}".format(name))

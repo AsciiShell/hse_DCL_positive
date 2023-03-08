@@ -150,11 +150,12 @@ def test(net, memory_data_loader, test_data_loader, *, top_k, class_cnt, cuda=Tr
 def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cuda=True, writer, feature_dim=128,
          temperature=0.5, tau_plus=0.1, top_k=200, epochs=200, num_pos=1, drop_fn=False, noise_frac=0.0,
          m_agg_mode="loss_combination", run_uuid=None,
-         lr=1e-3, weight_decay=1e-6,
+         lr=1e-3, weight_decay=1e-6, loss_neg_w=None,
          ):
     config = {
         "dataset": dataset,
         "loss": loss,
+        "loss_neg_w": loss_neg_w,
         "model": model_arch,
         "feature_dim": feature_dim,
         "temperature": temperature,
@@ -201,7 +202,7 @@ def main(dataset: str, loss: str, root: str, batch_size: int, model_arch, *, cud
     )
     logger.info("Test dataset: %r", test_loader.dataset)
 
-    loss_criterion = get_loss(loss, temperature, cuda, tau_plus, drop_fn)
+    loss_criterion = get_loss(loss, temperature, cuda, tau_plus, drop_fn, loss_neg_w)
     logger.info("Loss: %r", loss_criterion)
 
     # model setup and optimizer config
